@@ -32,6 +32,7 @@ def find_accelerometers():
     return (os.path.join(dpath[0], 'in_accel_x_raw'),
             os.path.join(dpath[0], 'in_accel_y_raw'))
 
+
 x_accel_path, y_accel_path = find_accelerometers()
 
 
@@ -42,23 +43,35 @@ def refreshtouch():
 
 def countdisplays():
     return int(len([l for l in subprocess.check_output(['xrandr', '--current']).splitlines()
-                            if MONITOR_CONNECTED_RE.search(l)]))
+                    if MONITOR_CONNECTED_RE.search(l)]))
 
 
 # Landscape
+
+# The 'X' means to read the 'x_accel_path' register, since that's what
+# we need to determine landscape (ls) or portrait (pt) mode.  'N' is
+# 'Normal' and 'I' is 'Inverted.'  The magic numbers for the 'X' are
+# around a 65536-based device register; I'm guessing Poel worked with
+# them by just dumping them to the screen while tilting the screen
+# this way and that.  They seem to work just fine.
+
 def lsx(thex, they): return thex >= 65000 or thex <= 650
 def lsn(thex, they): return they <= 65000 and they >= 64000
 def lsi(thex, they): return they >= 650 and they <= 1100
 
-# Portrait
+# Portrait: L for "Left" and R for "Right."
+
 def ptx(thex, they): return not lsx(thex, they)
 def ptl(thex, they): return thex >= 800 and thex <= 1000
-def ptr(thex, they): return thex >= 64500 and thex <=64700
+def ptr(thex, they): return thex >= 64500 and thex <= 64700
 
 # It's a little odd that X labels it 'left' when you've just turned
 # the tablet to the right, and vice versa, but that's the convention,
 # I guess.
+
+
 Transform = namedtuple('Tranform', ['name', 'mode', 'matrix', 'xrule', 'yrule'])
+
 
 transforms = [
     Transform('normal',   0, '1 0 0 0 1 0 0 0 1',   lsx, lsn),
@@ -81,14 +94,14 @@ def manage_orientation_and_palm_rejection(options):
         int_displays = countdisplays()
         time.sleep(1.0/freq)
         if int_displays == 1:
-    
+
             # Check accelerometers
             # Do we need to check the touch_devices list every time?  I
             # think we do; the list will change dynamically if we
             # dynamically load the stylus driver after the system has
             # booted.
             touch_devices = filter(lambda n: DIGITIZER_RE.match(n),
-                                   subprocess.check_output(['xinput', '--list', '--name-only']).splitlines()) 
+                                   subprocess.check_output(['xinput', '--list', '--name-only']).splitlines())
             with open(x_accel_path, 'r') as fx:
                 with open(y_accel_path, 'r') as fy:
                     thex = float(fx.readline())
@@ -104,7 +117,7 @@ def manage_orientation_and_palm_rejection(options):
                                 current_orientation = check.name
                                 refreshtouch()
                                 break
-    
+
             # Palm rejection (sort-of):
             pen_devices = [p for p in touch_devices if PEN_RE.search(p)]
             pen_status = bool([p for p in pen_devices if is_in(p)])
@@ -112,6 +125,7 @@ def manage_orientation_and_palm_rejection(options):
                 print "%s palm rejection" % ("Activating" if pen_status else "Deactivating")
                 currently_proximate = pen_status
                 os.system("xinput %s '%s'" % (xinput_statemap[pen_status], devicename))
+
 
 if __name__ == '__main__':
     manage_orientation_and_palm_rejection(sys.argv[1:])
